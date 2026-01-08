@@ -1,0 +1,413 @@
+from idlelib.pyshell import usage_msg
+
+import pandas as pd
+import os
+import PyPDF2
+from sentence_transformers import SentenceTransformer, util
+
+
+def job_title_java():
+    return 'Java Developer'
+
+
+def job_title_ai():
+    return 'AI Associate'
+
+
+def job_title_research():
+    return 'Research Intern'
+
+
+def job_title_uiux():
+    return 'UI/UX Designer'
+
+
+def job_title_python():
+    return 'Python developer'
+
+def business_developer():
+    return 'Business Developer'
+
+def photographer():
+    return 'Photographer'
+
+
+jobs_list = [
+    'Backend Software Engineer Java SpringBoot SQL Microservices',
+    'Data Science AI Machine Learning Python Scikit-Learn',
+    'Academic Researcher Thesis Writing Literature Review',
+    'Creative UI/UX Designer Figma AdobeXD Graphic Prototyping',
+    'Professional Photographer Camera Lens Lighting Adobe Lightroom',
+    'Business Developer Sales Marketing Strategy Revenue'
+]
+def build_zero_list(length):
+    data = []
+    for _ in range(length):
+        data.append(0)
+    return data
+
+
+def build_job_dataframe(titles):
+    applied = build_zero_list(len(titles))
+    shortlisted = build_zero_list(len(titles))
+    hired = build_zero_list(len(titles))
+    frame = pd.DataFrame({
+        'Job Title': titles,
+        'Applied': applied,
+        'Shortlisted': shortlisted,
+        'Hired': hired
+    })
+    return frame
+
+
+def initialize_jobs():
+    titles = collect_job_titles()
+    frame = build_job_dataframe(titles)
+    return titles, frame
+
+def collect_job_titles():
+    return jobs_list
+
+
+def build_candidate_columns():
+    cols = []
+    cols.append('Name')
+    cols.append('Predicted Job')
+    cols.append('Match %')
+    cols.append('Status')
+    return cols
+
+
+def initialize_candidates():
+    columns = build_candidate_columns()
+    frame = pd.DataFrame(columns=columns)
+    return frame
+
+
+jobs_list, df_jobs = initialize_jobs()
+df_candidates = initialize_candidates()
+
+
+def load_semantic_model():
+    instance = SentenceTransformer('all-MiniLM-L6-v2')
+    return instance
+
+
+def encode_titles(model, titles):
+    vectors = model.encode(
+        titles,
+        convert_to_tensor=True
+    )
+    return vectors
+
+
+model = load_semantic_model()
+job_embeddings = encode_titles(model, jobs_list)
+
+
+def strip_spaces(text):
+    return text.strip()
+
+
+def remove_quotes(text):
+    text = text.replace("'", "")
+    text = text.replace('"', "")
+    return text
+
+
+def normalize_slashes(text):
+    return text.replace("\\ ", " ")
+
+
+def clean_filename(name):
+    name = name.strip()
+    name = name.replace("'", "").replace('"', "").replace("\\ ", " ")
+    return name
+
+
+def home_directory():
+    return os.path.expanduser("~")
+
+
+def downloads_path(filename):
+    return os.path.join(home_directory(), "Downloads", filename)
+
+
+def documents_path(filename):
+    return os.path.join(home_directory(), "Documents", filename)
+
+
+def working_directory_path(filename):
+    return os.path.join(os.getcwd(), filename)
+
+
+def raw_filename(filename):
+    return filename
+
+
+def possible_paths(filename):
+    paths = []
+    paths.append(downloads_path(filename))
+    paths.append(documents_path(filename))
+    paths.append(working_directory_path(filename))
+    paths.append(raw_filename(filename))
+    return paths
+
+
+def file_exists(path):
+    return os.path.exists(path)
+
+
+def open_pdf(path):
+    return open(path, 'rb')
+
+
+def read_pdf_pages(reader):
+    pages = []
+    for page in reader.pages:
+        pages.append(page)
+    return pages
+
+
+def extract_text_from_page(page):
+    return page.extract_text()
+
+
+import re
+
+
+def ai_match_zero_input(resume_text):
+    resume_embedding = encode_resume_text(model, resume_text)
+    scores = cosine_similarity_scores(resume_embedding, job_embeddings)
+
+    best_index = find_best_index(scores)
+    final_score = round(score_from_index(scores, best_index), 2)
+
+    if final_score < 15:
+        return "Unassigned / Generalist", final_score
+
+    return title_from_index(jobs_list, best_index), final_score
+
+
+def extract_pdf_text(path):
+    try:
+        with open(path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            content = ""
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    content += t
+            return content
+    except Exception as e:
+        print(f"DEBUG: PDF Error on path {path}: {e}")
+        return None
+
+
+def find_and_read_file(filename):
+    cleaned = clean_filename(filename)
+    paths = possible_paths(cleaned)
+    for path in paths:
+        if file_exists(path):
+            text = extract_pdf_text(path)
+            if text:
+                return text
+    return None
+
+
+def encode_resume_text(model, text):
+    return model.encode(text, convert_to_tensor=True)
+
+
+def cosine_similarity_scores(resume_embedding, job_vectors):
+    matrix = util.cos_sim(resume_embedding, job_vectors)
+    return matrix[0]
+
+
+def find_best_index(scores):
+    return scores.argmax().item()
+
+
+def score_from_index(scores, index):
+    return float(scores[index]) * 100
+
+
+def title_from_index(titles, index):
+    return titles[index]
+
+
+def ai_match_zero_input(resume_text):
+    resume_embedding = encode_resume_text(model, resume_text)
+
+    scores = cosine_similarity_scores(resume_embedding, job_embeddings)
+
+    best_index = find_best_index(scores)
+
+    final_score = round(score_from_index(scores, best_index), 2)
+
+    if final_score < 12:
+        return "Unassigned / Generalist", final_score
+
+    return title_from_index(jobs_list, best_index), final_score
+
+
+def candidate_name_field(name):
+    return name
+
+
+def candidate_job_field(job):
+    return job
+
+
+def candidate_score_field(score):
+    return score
+
+
+def candidate_status_field():
+    return 'Applied'
+
+
+def build_candidate_entry(name, job, score):
+    entry = {}
+    entry['Name'] = candidate_name_field(name)
+    entry['Predicted Job'] = candidate_job_field(job)
+    entry['Match %'] = candidate_score_field(score)
+    entry['Status'] = candidate_status_field()
+    return entry
+
+
+def add_candidate(name, job, score):
+    global df_candidates
+    entry = build_candidate_entry(name, job, score)
+    frame = pd.DataFrame([entry])
+    df_candidates = pd.concat([df_candidates, frame], ignore_index=True)
+
+
+def filter_candidates(job, status):
+    return df_candidates[
+        (df_candidates['Predicted Job'] == job) &
+        (df_candidates['Status'] == status)
+    ]
+
+
+def count_candidates(job, status):
+    return len(filter_candidates(job, status))
+
+
+def update_job_counts(index, job):
+    df_jobs.at[index, 'Applied'] = count_candidates(job, 'Applied')
+    df_jobs.at[index, 'Shortlisted'] = count_candidates(job, 'Shortlisted')
+    df_jobs.at[index, 'Hired'] = count_candidates(job, 'Hired')
+
+
+def sync_dashboard():
+    for index, row in df_jobs.iterrows():
+        update_job_counts(index, row['Job Title'])
+
+
+def print_separator():
+    print("=" * 65)
+
+
+def print_title():
+    print("AI CAREER FINDER - ZERO INPUT SEMANTIC MATCHING")
+
+
+def print_dashboard_header():
+    print_separator()
+    print_title()
+    print_separator()
+
+
+def print_job_table():
+    print(df_jobs[['Job Title', 'Applied', 'Shortlisted', 'Hired']])
+    print("-" * 65)
+
+
+def display_dashboard():
+    print_dashboard_header()
+    print_job_table()
+
+
+def display_candidates():
+    if df_candidates.empty:
+        print("\nNo candidates found")
+    else:
+        print("\n" + "-" * 65)
+        print("CANDIDATE DATABASE")
+        print("-" * 65)
+        print(df_candidates)
+        print("-" * 65)
+
+
+def print_menu_option_one():
+    print("[1] Scan Resume (Pre-trained ML)")
+
+
+def print_menu_option_two():
+    print("[2] View Candidates")
+
+
+def print_menu_option_three():
+    print("[3] Exit")
+
+
+def print_menu():
+    print_menu_option_one()
+    print_menu_option_two()
+    print_menu_option_three()
+
+
+def update_candidate_status():
+    global df_candidates
+    if df_candidates.empty:
+        print("\nNo candidates to update.")
+        return
+
+    display_candidates()
+    name_to_find = input("\nEnter the Name of the candidate to update: ").strip()
+
+    if name_to_find.lower() in df_candidates['Name'].str.lower().values:
+        print("\nSelect New Status: [1] Shortlisted  [2] Hired  [3] Rejected")
+        choice = input("Choice: ")
+
+        status_map = {'1': 'Shortlisted', '2': 'Hired', '3': 'Rejected'}
+        new_status = status_map.get(choice)
+
+        if new_status:
+            df_candidates.loc[df_candidates['Name'].str.lower() == name_to_find.lower(), 'Status'] = new_status
+            print(f"✅ {name_to_find} is now {new_status}")
+        else:
+            print("❌ Invalid choice.")
+    else:
+        print("❌ Candidate not found.")
+
+
+def print_menu_option_four():
+    print("[4] Update Candidate Status")
+
+while True:
+    sync_dashboard()
+    display_dashboard()
+    print_menu()
+
+    cmd = input("\nAction: ").strip()
+
+    if cmd == '1':
+        name = input("Candidate Name: ").strip()
+        path = input("Paste PDF Path: ").strip()
+        resume_text = find_and_read_file(path)
+
+        if resume_text:
+            job, score = ai_match_zero_input(resume_text)
+            add_candidate(name, job, score)
+            print(f"\n{name} matched to {job}")
+            print(f"Semantic Confidence: {score}%")
+        else:
+            print("Resume file could not be read")
+
+    elif cmd == '2':
+        display_candidates()
+
+    elif cmd == '3':
+        break
